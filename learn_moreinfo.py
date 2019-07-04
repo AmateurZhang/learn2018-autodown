@@ -81,6 +81,8 @@ class TqdmUpTo(tqdm):
 def escape(s):
     return html.unescape(s).replace(os.path.sep, '、').replace(':', '_').replace(' ', '_').replace('\t', '').replace('?','.').replace('.','').replace('/','_').replace('\'','_').replace('<','').replace('>','').replace('#','').replace(';','').replace('*','_').replace("\"",'_').replace("\'",'_').replace('|','').replace('*','')
 
+def escape0(s):
+    return html.unescape(s).replace(os.path.sep, '、').replace(':', '_').replace(' ', '_').replace('\t', '')
 def download(uri, name=None, title=None):
     if name is None:
         for f in os.listdir('.'):
@@ -101,7 +103,7 @@ def download(uri, name=None, title=None):
         except:
             print('Could not download %s due to parse filename' % title)
             return
-    filename = escape(name)
+    filename = escape0(name)
     if os.path.exists(filename) or 'Connection_close' in filename:
         return
     try:
@@ -160,7 +162,8 @@ def sync_file(c):
             if not os.path.exists(pretp): 
             	os.makedirs(pretp)
             else:
-            	continue
+                print('reuse file')
+                continue
             os.chdir(pretp)
             try:
                 download('/b/wlxt/kj/wlkc_kjxxb/student/downloadFile?sfgk=0&wjid=%s' % f[7], title=f[1])
@@ -175,11 +178,11 @@ def sync_info(c):
     if not os.path.exists(pre): os.makedirs(pre)
     
     try:
-        html = getHtml('http://learn.tsinghua.edu.cn/f/wlxt/kc/v_kcxx_jskcxx/student/beforeXskcxx?wlkcid=%s&sfgk=-1'%c['wlkcid'])
-        #print(html)
+        html = getHtml('/f/wlxt/kc/v_kcxx_jskcxx/student/beforeXskcxx?wlkcid=%s&sfgk=-1' % c['wlkcid'])
+        
         path = os.path.join(pre,c['kcm']+'_课程信息.html')
         print(path)
-        open(path ,'wb').write(html)
+        open(path ,'w').write(html)
     except:
         return
 
@@ -188,6 +191,10 @@ def build_course_info(s):
     return pre
 def sync_hw(c):
     now = os.getcwd()
+    try:
+        shutil.rmtree(os.path.join(c['kcm'], '作业'))
+    except:
+        print('No hw\n')
     pre = os.path.join(c['kcm'], '作业')
     if not os.path.exists(pre): os.makedirs(pre)
     data = {'aoData': [{"name": "iDisplayLength", "value": "1000"}, {"name": "wlkcid", "value": c['wlkcid']}]}
@@ -222,14 +229,14 @@ def sync_discuss(c):
         ptp = os.path.join(pre, '%d_'%i+escape(d['bt']))
         if not os.path.exists(ptp): os.makedirs(ptp)        
         open(os.path.join(ptp, escape(d['bt'])+'.txt') ,'w',encoding='utf-8').write(build_discuss(d))
-        path = os.path.join(ptp,escape(d['bt'])+'_回复.html')
+        path = os.path.join(ptp,escape(d['bt'])+'_回复.md')
         if os.path.exists(path):
             print('Reuse...\n')
             continue
         print(path)
         try:
-            html = getHtml('http://learn.tsinghua.edu.cn/f/wlxt/bbs/bbs_tltb/student/viewTlById?wlkcid=%s&id=%s&tabbh=2&bqid=%s'%(d['wlkcid'],d['id'],d['bqid']))
-            open(path ,'wb').write(html) 
+            html = get_page('/f/wlxt/bbs/bbs_tltb/student/viewTlById?wlkcid=%s&id=%s&tabbh=2&bqid=%s' % (d['wlkcid'], d['id'], d['bqid']))
+            open(path, 'w').write(build_discuss(d) + bs(html, 'html.parser').find(class_='detail').text)
         except:
             i = i - 1
         
@@ -247,7 +254,13 @@ if __name__ == '__main__':
         #    courses = [c for c in courses if c['kcm'] == sys.argv[-1]]
         kclb = '课程列表:\n'
         i = 0
+        countsys = 0
         for c in courses:
+            if '文化素质教育讲座' in c['kcm']:
+                countsys = countsys+1
+                if countsys == 2:
+                    c['kcm'] = '文化素质教育讲座（2）'
+            
             i = i+1
             c['kcm'] = escape(c['kcm'])
             kclb = kclb + '-------------No. %d-------------'%i+build_course_info(c)
@@ -255,9 +268,9 @@ if __name__ == '__main__':
             print('Sync ' + c['kcm'])
             if not os.path.exists(c['kcm']): os.makedirs(c['kcm'])
             sync_discuss(c)
-            #sync_notify(c)
-            #sync_file(c)
-            #sync_hw(c)
-            #sync_info(c)
+            sync_notify(c)
+            sync_file(c)
+            sync_hw(c)
+            sync_info(c)
             
-        #open('课程列表.txt' ,'w').write(kclb)
+        open('课程列表.txt' ,'w').write(kclb)
